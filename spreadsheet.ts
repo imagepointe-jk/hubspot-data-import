@@ -10,20 +10,14 @@ type DataFromWorkbook = {
 };
 
 export function getSourceJson(path: string) {
-  try {
-    const file = fs.readFileSync(path);
-    const workbook = xlsx.read(file, { type: "buffer" });
-    const data: DataFromWorkbook = {};
-    for (const sheetName of workbook.SheetNames) {
-      data[`${sheetName}`] = xlsx.utils.sheet_to_json(
-        workbook.Sheets[sheetName]
-      );
-    }
-
-    return data;
-  } catch (error) {
-    throw new Error("ERROR PARSING SOURCE");
+  const file = fs.readFileSync(path);
+  const workbook = xlsx.read(file, { type: "buffer" });
+  const data: DataFromWorkbook = {};
+  for (const sheetName of workbook.SheetNames) {
+    data[`${sheetName}`] = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
   }
+
+  return data;
 }
 
 export function writeAsSheet(data: Obj[], filename: string) {

@@ -28,7 +28,7 @@ export const customerSchema = z.object({
   ["State"]: z.string().optional(),
   ["Zip Code"]: z.coerce.string().optional(),
   ["Country"]: z.string().optional(),
-  ["Phone#"]: z.string().optional(),
+  ["Phone#"]: z.coerce.string().optional(),
 });
 
 export const contactSchema = z.object({
@@ -96,3 +96,17 @@ export const productSchema = z.object({
   ["Product Type"]: z.string().optional(),
   ["Unit Price"]: z.number().optional(),
 });
+
+export type Customer = z.infer<typeof customerSchema>;
+export type Contact = z.infer<typeof contactSchema>;
+export type Order = z.infer<typeof orderSchema>;
+export type Product = z.infer<typeof productSchema>;
+export type LineItem = z.infer<typeof lineItemSchema>;
+export type PO = z.infer<typeof poSchema>;
+export type ImpressDataType =
+  | "Customer"
+  | "Contact"
+  | "Order"
+  | "Line Item"
+  | "PO"
+  | "Product";
