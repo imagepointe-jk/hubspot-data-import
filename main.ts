@@ -1,3 +1,5 @@
+import { AppError, DataError } from "./error";
+import { syncCustomerAsCompany } from "./fetch";
 import {
   getContactsAndErrors,
   getCustomersAndErrors,
@@ -6,6 +8,9 @@ import {
   getPoAndErrors,
   getProductsAndErrors,
 } from "./handleData";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 async function run() {
   const customers = getCustomersAndErrors();
@@ -14,7 +19,12 @@ async function run() {
   const products = getProductsAndErrors();
   const lineItems = getLineItemsAndErrors();
   const po = getPoAndErrors();
-  console.log(po);
+
+  for (const customer of customers) {
+    if (customer instanceof DataError) continue;
+    const { id } = await syncCustomerAsCompany(customer);
+    console.log(`synced customer as company ${id}`);
+  }
 }
 
 run();

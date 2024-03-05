@@ -84,7 +84,7 @@ function parseSheetData<T>(
   const sheetName = dataTypeToSheetName(type);
   const path = useSampleData
     ? `./samples/${sheetName}.xlsx`
-    : `./${sheetName}.xlsx`;
+    : `./data for upload/${sheetName}.xlsx`;
   const raw = getSourceJson(path)[sheetName];
   const parsedRows = raw.map((row, i) => {
     const rowIdentifier = createRowIdentifier

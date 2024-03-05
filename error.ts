@@ -18,3 +18,15 @@ export class DataError extends Error {
     this.rowNumber = rowNumber;
   }
 }
+
+type AppErrorType = "Environment" | "API" | "Unknown";
+
+export class AppError extends Error {
+  public readonly type;
+
+  constructor(type: AppErrorType, message?: string) {
+    super(message);
+
+    this.type = type;
+  }
+}
