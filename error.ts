@@ -19,7 +19,7 @@ export class DataError extends Error {
   }
 }
 
-type AppErrorType = "Environment" | "API" | "Unknown";
+type AppErrorType = "Environment" | "API" | "Data Integrity" | "Unknown";
 
 export class AppError extends Error {
   public readonly type;

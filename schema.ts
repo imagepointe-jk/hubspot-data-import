@@ -110,3 +110,15 @@ export type ImpressDataType =
   | "Line Item"
   | "PO"
   | "Product";
+
+//associates the ID of the company resource that got created in HubSpot with the Impress customer number
+export type CompanyResource = {
+  hubspotId: number;
+  customerNumber: number;
+};
+
+//associates the ID of the company resource that got created in HubSpot with the Impress contact email. Note that this is not a reliable association yet because many historical contacts have no listed email.
+export type ContactResource = {
+  hubspotId: number;
+  email: string;
+};
