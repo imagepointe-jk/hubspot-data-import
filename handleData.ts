@@ -3,6 +3,7 @@ import { DataError } from "./error";
 import {
   Contact,
   Customer,
+  HubSpotOwner,
   ImpressDataType,
   LineItem,
   Order,
@@ -18,6 +19,7 @@ import {
   parsePo,
   parseProduct,
 } from "./validation";
+import { makeStringTitleCase } from "./utility";
 
 const useSampleData = true; //only for testing
 
@@ -37,7 +39,10 @@ export function getContactsAndErrors(): (Contact | DataError)[] {
   );
 }
 
-export function getOrdersAndErrors(): (Order | DataError)[] {
+export function getOrdersAndErrors(
+  allOwners: HubSpotOwner[],
+  allPo: (PO | DataError)[]
+): (Order | DataError)[] {
   const ordersAndErrors = parseSheetData(
     "Order",
     parseOrder,
@@ -45,7 +50,7 @@ export function getOrdersAndErrors(): (Order | DataError)[] {
   );
   return ordersAndErrors.map((item) => {
     if (item instanceof DataError) return item;
-    return enrichOrder(item);
+    return enrichOrder(item, allOwners, allPo);
   });
 }
 
@@ -69,9 +74,34 @@ export function getPoAndErrors(): (PO | DataError)[] {
   );
 }
 
-function enrichOrder(order: Order): Order {
+function enrichOrder(
+  order: Order,
+  allOwners: HubSpotOwner[],
+  allPo: (PO | DataError)[]
+): Order {
+  //To assign a HubSpot owner, we need their HubSpot id, and currently HubSpot doesn't allow us to search this by name.
+  const foundOwner = allOwners.find(
+    (owner) =>
+      `${owner.firstName} ${owner.lastName}`.toLocaleLowerCase() ===
+      order["Agent Name#1"]?.toLocaleLowerCase()
+  );
+  const foundPo = allPo.find(
+    (po) =>
+      !(po instanceof DataError) && po["Sales Order#"] === order["Sales Order#"]
+  );
   const newOrder = { ...order };
   newOrder["Invoice Date"] = newOrder["Entered Date"];
+  newOrder.Pipeline = "default";
+  newOrder["Deal Stage"] = "closedwon";
+  if (newOrder.Shorted) newOrder["Deal Stage"] = "closedlost";
+  if (!newOrder.Shorted && !newOrder["Invoice Date"])
+    newOrder["Deal Stage"] = "contractsent";
+  newOrder["HubSpot Owner ID"] = foundOwner ? `${foundOwner.id}` : undefined;
+  newOrder["PO#"] =
+    foundPo && !(foundPo instanceof DataError) ? foundPo["PO#"] : undefined;
+  newOrder["Sales Order Type"] = newOrder["Sales Order Type"]
+    ? makeStringTitleCase(newOrder["Sales Order Type"])
+    : undefined;
 
   return newOrder;
 }

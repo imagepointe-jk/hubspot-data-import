@@ -1,6 +1,8 @@
+import { z } from "zod";
 import {
   contactSchema,
   customerSchema,
+  hubSpotOwnerSchema,
   lineItemSchema,
   orderSchema,
   poSchema,
@@ -29,4 +31,8 @@ export function parsePo(row: any) {
 
 export function parseProduct(row: any) {
   return productSchema.parse(row);
+}
+
+export function parseHubSpotOwnerResults(json: any) {
+  return z.object({ results: z.array(hubSpotOwnerSchema) }).parse(json);
 }

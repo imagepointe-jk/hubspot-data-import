@@ -1,6 +1,19 @@
 import { AppError } from "./error";
-import { mapContactToContact, mapCustomerToCompany } from "./mapData";
-import { CompanyResource, Contact, Customer } from "./schema";
+import {
+  mapContactToContact,
+  mapCustomerToCompany,
+  mapOrderToDeal,
+} from "./mapData";
+import {
+  CompanyResource,
+  Contact,
+  ContactResource,
+  Customer,
+  HubSpotOwner,
+  Order,
+  PO,
+} from "./schema";
+import { parseHubSpotOwnerResults } from "./validation";
 
 const accessToken = () => {
   const accessToken = process.env.HUBSPOT_ACCESS_TOKEN;
@@ -141,7 +154,7 @@ export async function syncContactAsContact(
     );
   }
 
-  //now that we have the id of the existing company, update its data.
+  //now that we have the id of the existing contact, update its data.
   const existingContactId = +findJson.results[0].id;
   const patchResponse = await patchContactWithContact(
     contact,
@@ -158,6 +171,78 @@ export async function syncContactAsContact(
   return {
     id: +patchJson.id,
   };
+}
+
+export async function syncOrderAsDeal(
+  order: Order,
+  syncedCompanies: CompanyResource[],
+  syncedContacts: ContactResource[]
+): Promise<ResourceData> {
+  const associatedCompany = syncedCompanies.find(
+    (company) => company.customerNumber === order["Customer Number"]
+  );
+  const associatedContact = syncedContacts.find(
+    (contact) => contact.email === order["Buyer E-Mail"]
+  );
+  if (!associatedCompany) {
+    throw new AppError(
+      "Data Integrity",
+      `Order ${order["Sales Order#"]} references a company that was not found in the dataset.`
+    );
+  }
+  if (!associatedContact) {
+    throw new AppError(
+      "Data Integrity",
+      `Order ${order["Sales Order#"]} references a contact that was not found in the dataset.`
+    );
+  }
+  //? We're currently mapping Sales Order# to HubSpot's default Deal Name, but Deal Name doesn't require unique values.
+  //? This allows multiple deals with the same Sales Order# to be posted, when we intended Sales Order# to be unique.
+  //? Currently we get around this by making an extra API call to first search for the deal before trying to create it.
+  //? It would be better for each deal to have a unique identifier other than the HubSpot record ID.
+  //? This way we don't need the extra call just to avoid creating duplicate deals.
+  const findResponse = await findDealByName(order["Sales Order#"]);
+  if (!findResponse.ok) {
+    throw new AppError(
+      "API",
+      `Failed to execute search for deal with sales order# ${order["Sales Order#"]}`
+    );
+  }
+  const findJson = await findResponse.json();
+  const existingDealId =
+    findJson.results.length > 0 ? +findJson.results[0].id : undefined;
+
+  if (existingDealId) {
+    //a deal with this sales order# already exists, so update it
+    const patchResponse = await patchDealWithOrder(order, existingDealId);
+    if (!patchResponse.ok) {
+      throw new AppError(
+        "API",
+        `Failed to update existing deal with sales order# ${order["Sales Order#"]}`
+      );
+    }
+    const patchJson = await patchResponse.json();
+    return {
+      id: +patchJson.id,
+    };
+  } else {
+    //the deal doesn't already exist, so create it
+    const postResponse = await postOrderAsDeal(
+      order,
+      associatedCompany.hubspotId,
+      associatedContact.hubspotId
+    );
+    if (!postResponse.ok) {
+      throw new AppError(
+        "API",
+        `Failed to create deal with sales order# ${order["Sales Order#"]}`
+      );
+    }
+    const postJson = await postResponse.json();
+    return {
+      id: +postJson.id,
+    };
+  }
 }
 
 function postCustomerAsCompany(customer: Customer) {
@@ -297,4 +382,113 @@ function patchContactWithContact(contact: Contact, contactId: number) {
     `https://api.hubapi.com/crm/v3/objects/contacts/${contactId}`,
     requestOptions
   );
+}
+
+function postOrderAsDeal(
+  order: Order,
+  associatedCompanyId: number,
+  associatedContactId: number
+) {
+  const headers = standardHeaders();
+
+  const raw = JSON.stringify({
+    properties: mapOrderToDeal(order),
+    associations: [
+      {
+        to: {
+          id: associatedCompanyId,
+        },
+        types: [
+          {
+            associationCategory: "HUBSPOT_DEFINED",
+            associationTypeId: 341,
+          },
+        ],
+      },
+      {
+        to: {
+          id: associatedContactId,
+        },
+        types: [
+          {
+            associationCategory: "HUBSPOT_DEFINED",
+            associationTypeId: 3,
+          },
+        ],
+      },
+    ],
+  });
+
+  const requestOptions = {
+    method: "POST",
+    headers: headers,
+    body: raw,
+  };
+
+  return fetch("https://api.hubapi.com/crm/v3/objects/deals", requestOptions);
+}
+
+function findDealByName(dealName: string) {
+  const myHeaders = standardHeaders();
+
+  const raw = JSON.stringify({
+    filters: [
+      {
+        propertyName: "dealname",
+        operator: "EQ",
+        value: dealName,
+      },
+    ],
+  });
+
+  const requestOptions = {
+    method: "POST",
+    headers: myHeaders,
+    body: raw,
+  };
+
+  return fetch(
+    "https://api.hubapi.com/crm/v3/objects/deals/search",
+    requestOptions
+  );
+}
+
+function patchDealWithOrder(order: Order, id: number) {
+  const myHeaders = standardHeaders();
+
+  const raw = JSON.stringify({
+    properties: mapOrderToDeal(order),
+  });
+
+  const requestOptions = {
+    method: "PATCH",
+    headers: myHeaders,
+    body: raw,
+  };
+
+  return fetch(
+    `https://api.hubapi.com/crm/v3/objects/deals/${id}`,
+    requestOptions
+  );
+}
+
+export async function getAllOwners(): Promise<HubSpotOwner[]> {
+  const headers = standardHeaders();
+  headers.delete("Content-Type");
+
+  const requestOptions = {
+    method: "GET",
+    headers: headers,
+  };
+
+  //HubSpot currently imposes a hard limit of 500 owners per request.
+  const response = await fetch(
+    "https://api.hubapi.com/crm/v3/owners/?limit=500",
+    requestOptions
+  );
+  if (!response.ok) return [];
+
+  const json = await response.json();
+  const parsed = parseHubSpotOwnerResults(json);
+  return parsed.results;
 }

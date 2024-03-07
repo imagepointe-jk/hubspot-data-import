@@ -55,11 +55,12 @@ export const orderSchema = z.object({
   ["Customer PO#"]: z.string().optional(),
   ["Agent Name#1"]: z.string().optional(),
   ["Purchaser"]: z.string().optional(),
-  ["Buyer Email"]: z.string().email().optional(),
+  ["Buyer E-Mail"]: z.string().email().optional(),
   ["Shipping $Cost"]: z.number().optional(),
   ["Tax $Total"]: z.number().optional(),
   ["Order $Total"]: z.number().optional(),
   ["Order $Cost"]: z.number().optional(),
+  ["Shorted"]: z.enum(["X"]).optional(),
   ["Commission Amount"]: z.number().optional(),
   ["Invoice Date"]: excelSerialDate.optional(),
   ["Internal Comments"]: z.string().optional(),
@@ -71,6 +72,7 @@ export const orderSchema = z.object({
   ["Pipeline"]: z.string().optional(),
   ["Deal Stage"]: z.string().optional(),
   ["PO#"]: z.string().optional(),
+  ["HubSpot Owner ID"]: z.string().optional(),
 });
 
 export const lineItemSchema = z.object({
@@ -97,12 +99,19 @@ export const productSchema = z.object({
   ["Unit Price"]: z.number().optional(),
 });
 
+export const hubSpotOwnerSchema = z.object({
+  id: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+});
+
 export type Customer = z.infer<typeof customerSchema>;
 export type Contact = z.infer<typeof contactSchema>;
 export type Order = z.infer<typeof orderSchema>;
 export type Product = z.infer<typeof productSchema>;
 export type LineItem = z.infer<typeof lineItemSchema>;
 export type PO = z.infer<typeof poSchema>;
+export type HubSpotOwner = z.infer<typeof hubSpotOwnerSchema>;
 export type ImpressDataType =
   | "Customer"
   | "Contact"
@@ -117,8 +126,14 @@ export type CompanyResource = {
   customerNumber: number;
 };
 
-//associates the ID of the company resource that got created in HubSpot with the Impress contact email. Note that this is not a reliable association yet because many historical contacts have no listed email.
+//associates the ID of the contact resource that got created in HubSpot with the Impress contact email. Note that this is not a reliable association yet because many historical contacts have no listed email.
 export type ContactResource = {
   hubspotId: number;
   email: string;
+};
+
+//associates the ID of the deal resource that got created in HubSpot with the Impress sales order#.
+export type DealResource = {
+  hubspotId: number;
+  salesOrderNum: string;
 };
