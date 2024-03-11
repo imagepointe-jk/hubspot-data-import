@@ -3,6 +3,7 @@ import {
   mapContactToContact,
   mapCustomerToCompany,
   mapOrderToDeal,
+  mapProductToProduct,
 } from "./mapData";
 import {
   CompanyResource,
@@ -12,6 +13,7 @@ import {
   HubSpotOwner,
   Order,
   PO,
+  Product,
 } from "./schema";
 import { parseHubSpotOwnerResults } from "./validation";
 
@@ -243,6 +245,71 @@ export async function syncOrderAsDeal(
       id: +postJson.id,
     };
   }
+}
+
+export async function syncProductAsProduct(
+  product: Product
+): Promise<ResourceData> {
+  //assume the product doesn't exist yet and try to create a new one
+  const postResponse = await postProductAsProduct(product);
+  const postJson = await postResponse.json();
+  if (postResponse.ok) {
+    return {
+      id: +postJson.id,
+    };
+  }
+
+  const message = postJson.message;
+  //! this check could break if HubSpot changes the wording of this error message.
+  //! unfortunately the response they send for an existing resource conflict is status 400,
+  //! so it's hard to distinguish between this and a bad request.
+  const productAlreadyExists =
+    typeof message === "string" &&
+    message.includes("propertyName=hs_sku") &&
+    message.includes("already has that value");
+  if (!productAlreadyExists) {
+    //there was some error, but not because of a pre-existing product
+    throw new AppError(
+      "API",
+      `Error ${postResponse.status} while trying to sync product ${product.Name}.`
+    );
+  }
+
+  //at this point we know there's already a product with the given SKU.
+  //we have to first find the existing product with the SKU so that we can update it by its id.
+  //the error from the post request does not reliably provide the id of the existing record,
+  //and the PATCH endpoint currently doesn't allow patching by customer number (even though it's unique).
+  const findResponse = await findProductBySku(product.Name); //in impress the SKU is always in the "name" field for some reason
+  if (!findResponse.ok) {
+    throw new AppError(
+      "API",
+      `Failed to execute search for existing product ${product.Name}`
+    );
+  }
+  const findJson = await findResponse.json();
+  if (findJson.total !== 1) {
+    throw new AppError(
+      "API",
+      `Failed to find existing product ${product.Name}`
+    );
+  }
+
+  //now that we have the id of the existing product, update its data.
+  const existingProductId = +findJson.results[0].id;
+  const patchResponse = await patchProductWithProduct(
+    product,
+    existingProductId
+  );
+  if (!patchResponse.ok) {
+    throw new AppError(
+      "API",
+      `Failed to patch existing product ${product.Name}`
+    );
+  }
+
+  return {
+    id: +existingProductId,
+  };
 }
 
 function postCustomerAsCompany(customer: Customer) {
@@ -491,4 +558,67 @@ export async function getAllOwners(): Promise<HubSpotOwner[]> {
   const json = await response.json();
   const parsed = parseHubSpotOwnerResults(json);
   return parsed.results;
+}
+
+function postProductAsProduct(product: Product) {
+  const headers = standardHeaders();
+
+  const raw = JSON.stringify({
+    properties: mapProductToProduct(product),
+  });
+
+  const requestOptions = {
+    method: "POST",
+    headers: headers,
+    body: raw,
+  };
+
+  return fetch(
+    "https://api.hubapi.com/crm/v3/objects/products",
+    requestOptions
+  );
+}
+
+function findProductBySku(sku: string) {
+  const myHeaders = standardHeaders();
+
+  const raw = JSON.stringify({
+    filters: [
+      {
+        propertyName: "hs_sku",
+        operator: "EQ",
+        value: sku,
+      },
+    ],
+  });
+
+  const requestOptions = {
+    method: "POST",
+    headers: myHeaders,
+    body: raw,
+  };
+
+  return fetch(
+    "https://api.hubapi.com/crm/v3/objects/products/search",
+    requestOptions
+  );
+}
+
+function patchProductWithProduct(product: Product, id: number) {
+  const myHeaders = standardHeaders();
+
+  const raw = JSON.stringify({
+    properties: mapProductToProduct(product),
+  });
+
+  const requestOptions = {
+    method: "PATCH",
+    headers: myHeaders,
+    body: raw,
+  };
+
+  return fetch(
+    `https://api.hubapi.com/crm/v3/objects/products/${id}`,
+    requestOptions
+  );
 }

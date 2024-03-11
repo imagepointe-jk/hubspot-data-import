@@ -1,4 +1,4 @@
-import { Contact, Customer, Order } from "./schema";
+import { Contact, Customer, Order, Product } from "./schema";
 import { hashObject } from "./utility";
 
 //return key-value pairs where the value is the Impress value and the key is the exact property name expected by HubSpot API
@@ -70,5 +70,14 @@ export function mapOrderToDeal(order: Order) {
     pipeline: order.Pipeline,
     dealstage: order["Deal Stage"],
     po_: order["PO#"],
+  };
+}
+
+export function mapProductToProduct(product: Product) {
+  return {
+    name: product.SKU,
+    hs_sku: product.Name,
+    price: product["Unit Price"],
+    hs_product_type: product["Product Type"]?.toLocaleLowerCase(),
   };
 }

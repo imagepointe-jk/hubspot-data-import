@@ -4,6 +4,7 @@ import {
   syncContactAsContact,
   syncCustomerAsCompany,
   syncOrderAsDeal,
+  syncProductAsProduct,
 } from "./fetch";
 import {
   getContactsAndErrors,
@@ -14,7 +15,12 @@ import {
   getProductsAndErrors,
 } from "./handleData";
 import dotenv from "dotenv";
-import { CompanyResource, ContactResource, DealResource } from "./schema";
+import {
+  CompanyResource,
+  ContactResource,
+  DealResource,
+  ProductResource,
+} from "./schema";
 import { mapContactToContact } from "./mapData";
 import { printProgress } from "./console";
 
@@ -29,11 +35,13 @@ async function run() {
   const orders = getOrdersAndErrors(owners, po);
   const products = getProductsAndErrors();
   const lineItems = getLineItemsAndErrors();
-  const totalItems = customers.length + contacts.length + orders.length;
+  const totalItems =
+    customers.length + contacts.length + orders.length + products.length;
 
   const syncedCompanies: CompanyResource[] = [];
   const syncedContacts: ContactResource[] = [];
   const syncedDeals: DealResource[] = [];
+  const syncedProducts: ProductResource[] = [];
 
   for (let i = 0; i < customers.length; i++) {
     const customer = customers[i];
@@ -82,6 +90,21 @@ async function run() {
     syncedDeals.push({
       hubspotId: id,
       salesOrderNum: order["Sales Order#"],
+    });
+  }
+
+  for (let i = 0; i < products.length; i++) {
+    const product = products[i];
+    if (product instanceof DataError) continue;
+    printProgress({
+      message: `Syncing product entry ${i + 1} of ${products.length}...`,
+      currentItem: i + customers.length + contacts.length + orders.length,
+      totalItems,
+    });
+    const { id } = await syncProductAsProduct(product);
+    syncedProducts.push({
+      hubspotId: id,
+      sku: product.Name, //these are reversed in impress for some reason
     });
   }
 
