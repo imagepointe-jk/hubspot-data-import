@@ -3,6 +3,7 @@ import {
   getAllOwners,
   syncContactAsContact,
   syncCustomerAsCompany,
+  syncLineItemAsLineItem,
   syncOrderAsDeal,
   syncProductAsProduct,
 } from "./fetch";
@@ -34,13 +35,18 @@ async function run() {
   const owners = await getAllOwners();
   const orders = getOrdersAndErrors(owners, po);
   const products = getProductsAndErrors();
-  const lineItems = getLineItemsAndErrors();
+  const lineItems = getLineItemsAndErrors(products);
   const totalItems =
-    customers.length + contacts.length + orders.length + products.length;
+    customers.length +
+    contacts.length +
+    orders.length +
+    products.length +
+    lineItems.length;
 
   const syncedCompanies: CompanyResource[] = [];
   const syncedContacts: ContactResource[] = [];
   const syncedDeals: DealResource[] = [];
+  const existingDeals: string[] = []; //an array of "S" numbers for all the deals that were already in HubSpot BEFORE this run of syncing
   const syncedProducts: ProductResource[] = [];
 
   for (let i = 0; i < customers.length; i++) {
@@ -82,7 +88,7 @@ async function run() {
       currentItem: i + customers.length + contacts.length,
       totalItems,
     });
-    const { id } = await syncOrderAsDeal(
+    const { id, syncType } = await syncOrderAsDeal(
       order,
       syncedCompanies,
       syncedContacts
@@ -91,6 +97,7 @@ async function run() {
       hubspotId: id,
       salesOrderNum: order["Sales Order#"],
     });
+    if (syncType === "update") existingDeals.push(order["Sales Order#"]);
   }
 
   for (let i = 0; i < products.length; i++) {
@@ -106,6 +113,27 @@ async function run() {
       hubspotId: id,
       sku: product.Name, //these are reversed in impress for some reason
     });
+  }
+
+  for (let i = 0; i < lineItems.length; i++) {
+    const lineItem = lineItems[i];
+    if (lineItem instanceof DataError) continue;
+    printProgress({
+      message: `Syncing line item entry ${i + 1} of ${lineItems.length}...`,
+      currentItem:
+        i +
+        customers.length +
+        contacts.length +
+        orders.length +
+        products.length,
+      totalItems,
+    });
+    await syncLineItemAsLineItem(
+      lineItem,
+      existingDeals,
+      syncedDeals,
+      syncedProducts
+    );
   }
 
   process.stdout.clearLine(0);

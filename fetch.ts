@@ -2,6 +2,7 @@ import { AppError } from "./error";
 import {
   mapContactToContact,
   mapCustomerToCompany,
+  mapLineItemToLineItem,
   mapOrderToDeal,
   mapProductToProduct,
 } from "./mapData";
@@ -10,10 +11,13 @@ import {
   Contact,
   ContactResource,
   Customer,
+  DealResource,
   HubSpotOwner,
+  LineItem,
   Order,
   PO,
   Product,
+  ProductResource,
 } from "./schema";
 import { parseHubSpotOwnerResults } from "./validation";
 
@@ -179,7 +183,7 @@ export async function syncOrderAsDeal(
   order: Order,
   syncedCompanies: CompanyResource[],
   syncedContacts: ContactResource[]
-): Promise<ResourceData> {
+): Promise<ResourceData & { syncType: "create" | "update" }> {
   const associatedCompany = syncedCompanies.find(
     (company) => company.customerNumber === order["Customer Number"]
   );
@@ -226,6 +230,7 @@ export async function syncOrderAsDeal(
     const patchJson = await patchResponse.json();
     return {
       id: +patchJson.id,
+      syncType: "update",
     };
   } else {
     //the deal doesn't already exist, so create it
@@ -243,6 +248,7 @@ export async function syncOrderAsDeal(
     const postJson = await postResponse.json();
     return {
       id: +postJson.id,
+      syncType: "create",
     };
   }
 }
@@ -310,6 +316,51 @@ export async function syncProductAsProduct(
   return {
     id: +existingProductId,
   };
+}
+
+//! Since a deal could hypothetically have two line items with exactly the same data,
+//! and we don't have any unique identifiers for line items from Impress,
+//! there is currently no way to tell if a line item already existing for a deal in HubSpot
+//! is the same line item as the one input into this function.
+//! For now, SKIP all line items for deals that were already in HubSpot before this run of syncing.
+//! This is probably safe because needing to add new line items to already-synced deals
+//! would be very unusual.
+export async function syncLineItemAsLineItem(
+  lineItem: LineItem,
+  existingDealsArr: string[],
+  syncedDeals: DealResource[],
+  syncedProducts: ProductResource[]
+) {
+  const existingDeal = existingDealsArr.find(
+    (dealNumber) => dealNumber === lineItem["Sales Order#"]
+  );
+  if (existingDeal) return;
+
+  const associatedDeal = syncedDeals.find(
+    (deal) => deal.salesOrderNum === lineItem["Sales Order#"]
+  );
+  if (!associatedDeal) {
+    throw new AppError(
+      "Data Integrity",
+      `Line item for deal ${lineItem["Sales Order#"]} references a deal that was not found in the dataset.`
+    );
+  }
+
+  const associatedProduct = syncedProducts.find(
+    (product) => product.sku === lineItem.SKU
+  );
+  if (!associatedProduct) {
+    throw new AppError(
+      "Data Integrity",
+      `Line item for deal ${lineItem["Sales Order#"]} referenced product ${lineItem.SKU}, which was not found in the dataset.`
+    );
+  }
+
+  await postLineItem(
+    lineItem,
+    associatedDeal.hubspotId,
+    associatedProduct.hubspotId
+  );
 }
 
 function postCustomerAsCompany(customer: Customer) {
@@ -619,6 +670,43 @@ function patchProductWithProduct(product: Product, id: number) {
 
   return fetch(
     `https://api.hubapi.com/crm/v3/objects/products/${id}`,
+    requestOptions
+  );
+}
+
+function postLineItem(lineItem: LineItem, dealId: number, productId: number) {
+  const myHeaders = standardHeaders();
+
+  const mapped = mapLineItemToLineItem(lineItem);
+
+  const raw = JSON.stringify({
+    properties: {
+      ...mapped,
+      hs_product_id: productId,
+    },
+    associations: [
+      {
+        to: {
+          id: dealId,
+        },
+        types: [
+          {
+            associationCategory: "HUBSPOT_DEFINED",
+            associationTypeId: 20,
+          },
+        ],
+      },
+    ],
+  });
+
+  const requestOptions = {
+    method: "POST",
+    headers: myHeaders,
+    body: raw,
+  };
+
+  return fetch(
+    "https://api.hubapi.com/crm/v3/objects/line_items",
     requestOptions
   );
 }

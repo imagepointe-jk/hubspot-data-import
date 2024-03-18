@@ -84,7 +84,8 @@ export const lineItemSchema = z.object({
   ["SKU#"]: z.string().optional(), //comes from impress
   ["SKU"]: z.string().optional(), //filled with Item# if it's defined, otherwise SKU#
   ["Item#"]: z.string().optional(), //comes from impress
-  ["Name"]: z.string().optional(),
+  ["Name"]: z.string().optional(), //product name found from product spreadsheet based on "SKU" field
+  ["Sales Order#"]: z.string(),
 });
 
 export const poSchema = z.object({

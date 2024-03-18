@@ -1,4 +1,4 @@
-import { Contact, Customer, Order, Product } from "./schema";
+import { Contact, Customer, LineItem, Order, Product } from "./schema";
 import { hashObject } from "./utility";
 
 //return key-value pairs where the value is the Impress value and the key is the exact property name expected by HubSpot API
@@ -79,5 +79,17 @@ export function mapProductToProduct(product: Product) {
     hs_sku: product.Name,
     price: product["Unit Price"],
     hs_product_type: product["Product Type"]?.toLocaleLowerCase(),
+  };
+}
+
+export function mapLineItemToLineItem(lineItem: LineItem) {
+  return {
+    createdate: lineItem["Entered Date"],
+    description: lineItem.Size,
+    quantity: lineItem["Size Qty Ordered"],
+    hs_cost_of_goods_sold: lineItem["Size Cost"],
+    price: lineItem["Unit Price"],
+    hs_sku: lineItem["SKU#"],
+    name: lineItem.Name,
   };
 }

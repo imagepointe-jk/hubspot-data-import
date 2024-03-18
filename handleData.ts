@@ -58,12 +58,18 @@ export function getProductsAndErrors(): (Product | DataError)[] {
   return parseSheetData("Product", parseProduct, (row) => row["Name"]);
 }
 
-export function getLineItemsAndErrors(): (LineItem | DataError)[] {
-  return parseSheetData(
+export function getLineItemsAndErrors(
+  allProducts: (Product | DataError)[]
+): (LineItem | DataError)[] {
+  const lineItemsAndErrors = parseSheetData(
     "Line Item",
     parseLineItem,
     (row) => `Line item for order ${row["Sales Order#"]} and SKU ${row["SKU#"]}`
   );
+  return lineItemsAndErrors.map((item) => {
+    if (item instanceof DataError) return item;
+    return enrichLineItem(item, allProducts);
+  });
 }
 
 export function getPoAndErrors(): (PO | DataError)[] {
@@ -104,6 +110,24 @@ function enrichOrder(
     : undefined;
 
   return newOrder;
+}
+
+function enrichLineItem(
+  lineItem: LineItem,
+  allProducts: (Product | DataError)[]
+): LineItem {
+  const newLineItem = { ...lineItem };
+  newLineItem.SKU = newLineItem["Item#"]
+    ? newLineItem["Item#"]
+    : newLineItem["SKU#"];
+  const foundProduct = allProducts.find(
+    (product) =>
+      !(product instanceof DataError) && product.SKU === newLineItem.SKU
+  );
+  if (foundProduct && !(foundProduct instanceof DataError))
+    newLineItem.Name = foundProduct.Name;
+
+  return newLineItem;
 }
 
 function parseSheetData<T>(
