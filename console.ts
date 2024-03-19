@@ -13,7 +13,7 @@ export function printProgress(progressUpdate: SyncingUpdate | string) {
   const progress = progressUpdate.currentItem / progressUpdate.totalItems;
   const bar = createProgressBar(progress);
   process.stdout.write(
-    `${bar} ${progressUpdate.message} (${progress * 100})%\r`
+    `${bar} ${progressUpdate.message} (${Math.floor(progress * 100)})%\r`
   );
 }
 
