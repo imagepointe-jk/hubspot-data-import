@@ -8,6 +8,7 @@ import {
   syncProductAsProduct,
 } from "./fetch";
 import {
+  cleanupProductsSheet,
   getContactsAndErrors,
   getCustomersAndErrors,
   getLineItemsAndErrors,
@@ -29,6 +30,8 @@ dotenv.config();
 
 async function run() {
   printProgress("Gathering data...");
+  cleanupProductsSheet();
+
   const customers = getCustomersAndErrors();
   const contacts = getContactsAndErrors();
   const po = getPoAndErrors();
@@ -147,7 +150,7 @@ async function run() {
       const { id } = await syncProductAsProduct(product);
       syncedProducts.push({
         hubspotId: id,
-        sku: product.Name, //these are reversed in impress for some reason
+        sku: product.SKU,
       });
     } catch (error) {
       const errorToKeep =
@@ -155,7 +158,7 @@ async function run() {
           ? error
           : new AppError(
               "Unknown",
-              `Unknown error while syncing product ${product.Name}`
+              `Unknown error while syncing product ${product.SKU}`
             );
       syncErrors.push(errorToKeep);
     }

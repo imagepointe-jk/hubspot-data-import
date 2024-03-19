@@ -94,8 +94,8 @@ export const poSchema = z.object({
 });
 
 export const productSchema = z.object({
-  ["Name"]: z.string(),
-  ["SKU"]: z.string().optional(),
+  ["Name"]: z.string().optional(),
+  ["SKU"]: z.string(),
   ["Product Type"]: z.string().optional(),
   ["Unit Price"]: z.number().optional(),
 });

@@ -285,7 +285,7 @@ export async function syncProductAsProduct(
   //we have to first find the existing product with the SKU so that we can update it by its id.
   //the error from the post request does not reliably provide the id of the existing record,
   //and the PATCH endpoint currently doesn't allow patching by customer number (even though it's unique).
-  const findResponse = await findProductBySku(product.Name); //in impress the SKU is always in the "name" field for some reason
+  const findResponse = await findProductBySku(product.SKU);
   if (!findResponse.ok) {
     throw new AppError(
       "API",

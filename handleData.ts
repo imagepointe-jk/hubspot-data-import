@@ -10,7 +10,12 @@ import {
   PO,
   Product,
 } from "./schema";
-import { getSourceJson } from "./spreadsheet";
+import {
+  getSheetRawCells,
+  getSourceJson,
+  getSourceSheet,
+  writeAsSheet,
+} from "./spreadsheet";
 import {
   parseContact,
   parseCustomer,
@@ -19,7 +24,7 @@ import {
   parsePo,
   parseProduct,
 } from "./validation";
-import { makeStringTitleCase } from "./utility";
+import { duplicateFile, makeStringTitleCase } from "./utility";
 
 const useSampleData = true; //only for testing
 
@@ -56,6 +61,75 @@ export function getOrdersAndErrors(
 
 export function getProductsAndErrors(): (Product | DataError)[] {
   return parseSheetData("Product", parseProduct, (row) => row["Name"]);
+}
+
+export function cleanupProductsSheet() {
+  duplicateFile(
+    "./data for upload/products.xlsx",
+    "./data for upload/products (auto-backup).xlsx"
+  );
+
+  const sheet = getSourceSheet("./data for upload/products.xlsx", "products");
+  const productsPerPage = 59;
+  const products: Product[] = [
+    {
+      Name: "Less than Minimum Charge - Dye Sub",
+      SKU: "<MIN-DS",
+      "Product Type": "Service",
+      "Unit Price": 0,
+    },
+    {
+      Name: "Less than Minimum Charge - Embroidery",
+      SKU: "<MIN-EMB",
+      "Product Type": "Service",
+      "Unit Price": 0,
+    },
+    {
+      Name: "Less than Minimum Charge - PIP",
+      SKU: "<MIN-PIP",
+      "Product Type": "Service",
+      "Unit Price": 0,
+    },
+    {
+      Name: "Less than Minimum Charge - Screen Print",
+      SKU: "<MIN-SP",
+      "Product Type": "Service",
+      "Unit Price": 0,
+    },
+  ];
+
+  for (let page = 0; page < 500; page++) {
+    const startingRow = page * 63 + 5; //formula determined by observing pattern of Impress paginated output
+    const rows = getSheetRawCells(
+      {
+        columns: {
+          from: 1,
+          to: 2,
+        },
+        rows: {
+          from: startingRow,
+          to: startingRow + productsPerPage - 1,
+        },
+      },
+      sheet
+    );
+    const firstVal = rows[0][0];
+    const noPage = firstVal === undefined;
+    if (noPage) break;
+
+    for (const row of rows) {
+      const SKU = row[0];
+      const Name = row[1];
+      if (!SKU) break;
+      products.push({
+        SKU,
+        Name,
+        "Unit Price": 0,
+      });
+    }
+  }
+
+  writeAsSheet(products, "./data for upload/products", "products");
 }
 
 export function getLineItemsAndErrors(
